@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IHSG MA Ketat Scanner</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+:root {
+  --bg:       #07080f;
+  --s1:       #0d1020;
+  --s2:       #121627;
+  --s3:       #181e35;
+  --border:   #1c2540;
+  --border2:  #253060;
+  --cyan:     #00e5ff;
+  --green:    #00ff88;
+  --yellow:   #ffd600;
+  --orange:   #ff6d00;
+  --red:      #ff1744;
+  --muted:    #4a5880;
+  --text:     #c8d4f0;
+  --text2:    #8090b8;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Space Mono', monospace;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ── Scanline overlay ── */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── Glow grid bg ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,229,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,255,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+}
+
+/* ─────────── HEADER ─────────────────────────────── */
+header {
+  background: var(--s1);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  height: 56px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top:0; z-index: 200;
+  box-shadow: 0 1px 24px rgba(0,229,255,0.06);
+}
+
+.logo {
+  display: flex; align-items: center; gap: 14px;
+}
+.logo-mark {
+  width: 32px; height: 32px;
+  border: 1.5px solid var(--cyan);
+  border-radius: 6px;
+  display: grid; place-items: center;
+  font-size: 15px;
+  box-shadow: 0 0 12px rgba(0,229,255,0.3);
+  animation: borderPulse 3s ease-in-out infinite;
+}
+@keyframes borderPulse {
+  0%,100% { box-shadow: 0 0 8px rgba(0,229,255,0.2); }
+  50%      { box-shadow: 0 0 20px rgba(0,229,255,0.5); }
+}
+.logo-text {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.5px;
+  color: #fff;
+}
+.logo-sub {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+.hdr-right {
+  display: flex; align-items: center; gap: 20px;
+  font-size: 11px; color: var(--muted);
+}
+.hdr-clock { letter-spacing: 1px; }
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background 0.3s;
+}
+.status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+/* ─────────── CONTROLS ───────────────────────────── */
+.controls {
+  background: var(--s1);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 28px;
+  display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap;
+}
+
+.ctrl-group {
+  display: flex; flex-direction: column; gap: 5px;
+}
+.ctrl-label {
+  font-size: 9px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 2px;
+}
+.ctrl-input {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 7px 11px;
+  border-radius: 5px;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  width: 130px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ctrl-input:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 2px rgba(0,229,255,0.1);
+}
+select.ctrl-input { cursor: pointer; }
+
+.btn-scan {
+  background: var(--cyan);
+  color: #000;
+  border: none;
+  padding: 8px 24px;
+  border-radius: 5px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  transition: all 0.15s;
+  box-shadow: 0 0 16px rgba(0,229,255,0.3);
+  white-space: nowrap;
+}
+.btn-scan:hover { box-shadow: 0 0 28px rgba(0,229,255,0.5); transform: translateY(-1px); }
+.btn-scan:active { transform: translateY(0); }
+.btn-scan:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.btn-stop {
+  background: transparent;
+  color: var(--red);
+  border: 1px solid var(--red);
+  padding: 7px 18px;
+  border-radius: 5px;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  display: none;
+  transition: background 0.15s;
+}
+.btn-stop:hover { background: rgba(255,23,68,0.1); }
+
+/* ─────────── PROGRESS ───────────────────────────── */
+.prog-wrap {
+  display: none;
+  background: var(--s1);
+  padding: 0 28px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.prog-info {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--muted);
+  padding: 8px 0 4px;
+}
+.prog-outer {
+  height: 2px; background: var(--border);
+  border-radius: 1px; overflow: hidden;
+}
+.prog-inner {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan) 0%, var(--green) 100%);
+  width: 0%;
+  transition: width 0.4s ease;
+  border-radius: 1px;
+}
+
+/* ─────────── STATS BAR ──────────────────────────── */
+.stats-bar {
+  background: var(--s2);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 28px;
+  display: flex; gap: 0; flex-wrap: wrap;
+}
+.stat {
+  padding: 4px 24px 4px 0;
+  border-right: 1px solid var(--border);
+  margin-right: 24px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.stat:last-child { border-right: none; }
+.stat-val {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px; font-weight: 800;
+  line-height: 1;
+}
+.stat-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; }
+.c-cyan   { color: var(--cyan); }
+.c-green  { color: var(--green); }
+.c-yellow { color: var(--yellow); }
+.c-orange { color: var(--orange); }
+.c-red    { color: var(--red); }
+.c-muted  { color: var(--muted); }
+
+/* ─────────── MAIN ───────────────────────────────── */
+.main { padding: 20px 28px; }
+
+.section-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.section-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 14px; font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+}
+
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.badge-ketat  { background: rgba(0,229,255,0.1); border: 1px solid rgba(0,229,255,0.35); color: var(--cyan); }
+.badge-liquid { background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.3);  color: var(--green); }
+.badge-bull   { background: rgba(255,214,0,0.1);  border: 1px solid rgba(255,214,0,0.3);  color: var(--yellow); }
+.badge-stale  { background: rgba(74,88,128,0.2);  border: 1px solid var(--border);        color: var(--muted);  font-size: 8px; }
+.badge-cnt    { background: var(--s3); border: 1px solid var(--border2); color: var(--text2); }
+
+.sort-btns { display: flex; gap: 6px; }
+.sort-btn {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  transition: all 0.1s;
+  white-space: nowrap;
+}
+.sort-btn.on { border-color: var(--cyan); color: var(--cyan); background: rgba(0,229,255,0.05); }
+.sort-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* ─────────── CARDS ──────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(540px, 1fr));
+  gap: 14px;
+}
+
+.card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  animation: fadeUp 0.25s ease;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+@keyframes fadeUp {
+  from { opacity:0; transform: translateY(10px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+.card:hover { border-color: rgba(0,229,255,0.3); box-shadow: 0 0 24px rgba(0,229,255,0.06); }
+.card.ketat { border-color: rgba(0,229,255,0.25); }
+
+.card-head {
+  padding: 12px 14px 10px;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.card-ticker {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px; font-weight: 800;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.card-name {
+  font-size: 10px; color: var(--muted);
+  max-width: 240px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.card-badges { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+
+.card-price-wrap { text-align: right; }
+.card-price {
+  font-family: 'Syne', sans-serif;
+  font-size: 18px; font-weight: 800;
+}
+.card-chg {
+  font-size: 11px; font-weight: 700;
+  padding: 2px 7px; border-radius: 3px; margin-top: 3px; display: inline-block;
+}
+.up   { color: var(--green);  background: rgba(0,255,136,0.1); }
+.down { color: var(--red);    background: rgba(255,23,68,0.1); }
+.flat { color: var(--muted);  background: var(--s2); }
+.card-meta { font-size: 9px; color: var(--muted); margin-top: 4px; }
+
+/* ─────────── TABLE ──────────────────────────────── */
+.tbl-wrap { overflow-x: auto; }
+.tbl-wrap::-webkit-scrollbar { height: 4px; }
+.tbl-wrap::-webkit-scrollbar-track { background: var(--s1); }
+.tbl-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  white-space: nowrap;
+}
+thead th {
+  background: var(--s3);
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 5px 8px;
+  text-align: right;
+  font-weight: 400;
+  border-bottom: 1px solid var(--border);
+}
+thead th:first-child { text-align: left; }
+tbody td {
+  padding: 6px 8px;
+  text-align: right;
+  border-bottom: 1px solid rgba(28,37,64,0.6);
+  color: var(--text);
+}
+tbody td:first-child { text-align: left; color: var(--text2); font-size: 10px; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: rgba(0,229,255,0.02); }
+
+.ticks { color: var(--cyan); font-weight: 700; }
+.volp  { color: var(--green); font-weight: 700; }
+
+/* ─────────── CARD FOOTER ────────────────────────── */
+.card-foot {
+  padding: 7px 14px;
+  background: var(--s2);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 10px; color: var(--muted);
+}
+
+/* ─────────── EMPTY ──────────────────────────────── */
+.empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 80px 20px;
+}
+.empty-icon { font-size: 40px; opacity: 0.25; margin-bottom: 14px; }
+.empty-t { font-family: 'Syne', sans-serif; font-size: 17px; margin-bottom: 6px; }
+.empty-s { font-size: 11px; color: var(--muted); line-height: 1.8; }
+
+/* ─────────── LOG ────────────────────────────────── */
+.log-wrap {
+  margin-top: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.log-hdr {
+  background: var(--s2);
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px;
+}
+.log-body {
+  height: 140px; overflow-y: auto;
+  padding: 6px 14px;
+  background: var(--bg);
+}
+.log-body::-webkit-scrollbar { width: 3px; }
+.log-body::-webkit-scrollbar-thumb { background: var(--border2); }
+.log-line { display: flex; gap: 12px; font-size: 10px; line-height: 2; }
+.log-t  { color: rgba(74,88,128,0.6); width: 75px; flex-shrink: 0; }
+.l-ok   { color: var(--green); }
+.l-hot  { color: var(--cyan); font-weight: 700; }
+.l-err  { color: var(--orange); }
+.l-info { color: var(--muted); }
+
+/* ─────────── FLOAT OVERLAY ──────────────────────── */
+.float-scan {
+  position: fixed; bottom: 20px; right: 20px;
+  background: var(--s2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 12px 18px;
+  display: none; align-items: center; gap: 12px;
+  font-size: 11px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  z-index: 500;
+}
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* scrollbar global */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+@media (max-width:700px) {
+  header, .controls, .main, .stats-bar { padding-left:16px; padding-right:16px; }
+  .grid { grid-template-columns: 1fr; }
+  .ctrl-input { width: 110px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-mark">📡</div>
+    <div>
+      <div class="logo-text">MA KETAT SCANNER</div>
+      <div class="logo-sub">IHSG · BEI · Powered by Node.js</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <span class="hdr-clock" id="clock">--:--:--</span>
+    <span id="lastScan">Belum scan</span>
+    <div class="status-dot" id="statusDot"></div>
+  </div>
+</header>
+
+<!-- CONTROLS -->
+<div class="controls">
+  <div class="ctrl-group">
+    <span class="ctrl-label">Max Ticks</span>
+    <input type="number" class="ctrl-input" id="maxTicks" value="6" min="1" max="30" step="0.5">
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">Max Vol %</span>
+    <input type="number" class="ctrl-input" id="maxVol" value="3.8" min="0.5" max="15" step="0.1">
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">Min Volume (lembar)</span>
+    <input type="number" class="ctrl-input" id="minVolume" value="1000000" step="500000">
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">Req MA100 ≤ Close</span>
+    <select class="ctrl-input" id="reqBullish">
+      <option value="true">Ya (Bullish)</option>
+      <option value="false">Tidak</option>
+    </select>
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">Tampilkan Semua</span>
+    <select class="ctrl-input" id="showAll">
+      <option value="false">Ketat saja</option>
+      <option value="true">Semua saham</option>
+    </select>
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">Max Saham</span>
+    <input type="number" class="ctrl-input" id="maxStocks" value="100" min="5" max="800" step="5">
+  </div>
+  <div style="display:flex;gap:8px;align-items:flex-end">
+    <button class="btn-scan" id="btnScan" onclick="startScan()">▶ Mulai Scan</button>
+    <button class="btn-stop" id="btnStop" onclick="stopScan()">■ Stop</button>
+  </div>
+</div>
+
+<!-- PROGRESS -->
+<div class="prog-wrap" id="progWrap">
+  <div class="prog-info">
+    <span id="progTxt">Scanning...</span>
+    <span id="progPct">0%</span>
+  </div>
+  <div class="prog-outer"><div class="prog-inner" id="progBar"></div></div>
+</div>
+
+<!-- STATS -->
+<div class="stats-bar">
+  <div class="stat"><span class="stat-val c-muted"  id="sTotal">0</span><span class="stat-lbl">Total</span></div>
+  <div class="stat"><span class="stat-val c-cyan"   id="sScanned">0</span><span class="stat-lbl">Dianalisis</span></div>
+  <div class="stat"><span class="stat-val c-green"  id="sKetat">0</span><span class="stat-lbl">MA Ketat</span></div>
+  <div class="stat"><span class="stat-val c-yellow" id="sLiquid">0</span><span class="stat-lbl">Likuid</span></div>
+  <div class="stat"><span class="stat-val c-orange" id="sError">0</span><span class="stat-lbl">Error/Skip</span></div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="section-hdr">
+    <div class="section-title">
+      Hasil Scan
+      <span class="badge badge-ketat">MA KETAT</span>
+      <span class="badge badge-cnt" id="resCnt">0 saham</span>
+    </div>
+    <div class="sort-btns">
+      <button class="sort-btn on" id="sTicks"   onclick="setSort('ticks')">Ticks ↑</button>
+      <button class="sort-btn"   id="sVol"     onclick="setSort('vol')">Vol% ↑</button>
+      <button class="sort-btn"   id="sVolume"  onclick="setSort('volume')">Volume ↓</button>
+      <button class="sort-btn"   id="sChange"  onclick="setSort('change')">Change%</button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid">
+    <div class="empty">
+      <div class="empty-icon">📊</div>
+      <div class="empty-t">Siap Scan IHSG</div>
+      <div class="empty-s">
+        Atur parameter di atas, lalu klik <strong>Mulai Scan</strong><br>
+        Server Node.js akan fetch data Yahoo Finance tanpa CORS
+      </div>
+    </div>
+  </div>
+
+  <div class="log-wrap">
+    <div class="log-hdr">
+      <span>Scan Log</span>
+      <span id="logCnt">0 events</span>
+    </div>
+    <div class="log-body" id="logBody"></div>
+  </div>
+</div>
+
+<!-- Float overlay -->
+<div class="float-scan" id="floatScan">
+  <div class="spinner"></div>
+  <div>
+    <div style="color:var(--text);font-size:11px">Scanning...</div>
+    <div style="color:var(--muted);font-size:10px" id="floatTicker">-</div>
+  </div>
+</div>
+
+<script>
+// ─── Ticker list BEI ─────────────────────────────────────────────────────
+const TICKERS = [
+  "AALI","ABBA","ABDA","ABMM","ACES","ACST","ADES","ADHI","AISA","AKKU","AKPI","AKRA","AKSI","ALDO","ALKA","ALMI","ALTO","AMAG","AMFG","AMIN","AMRT","ANJT","ANTM","APEX","APIC","APII","APLI","APLN","ARGO","ARII","ARNA","ARTA","ARTI","ARTO","ASBI","ASDM","ASGR","ASII","ASJT","ASMI","ASRI","ASRM","ASSA","ATIC","AUTO","BABP","BACA","BAJA","BALI","BAPA","BATA","BAYU","BBCA","BBHI","BBKP","BBLD","BBMD","BBNI","BBRI","BBRM","BBTN","BBYB","BCAP","BCIC","BCIP","BDMN","BEKS","BEST","BFIN","BGTG","BHIT","BIKA","BIMA","BINA","BIPI","BIPP","BIRD","BISI","BJBR","BJTM","BKDP","BKSL","BKSW","BLTA","BLTZ","BMAS","BMRI","BMSR","BMTR","BNBA","BNBR","BNGA","BNII","BNLI","BOLT","BPFI","BPII","BRAM","BRMS",
+"BRNA","BRPT","BSDE","BSIM","BSSR","BSWD","BTEK","BTEL","BTON","BTPN","BUDI","BUKK","BULL","BUMI","BUVA","BVIC","BWPT","BYAN","CANI","CASS","CEKA","CENT","CFIN","CINT","CITA","CLPI","CMNP","CMPP","CNKO","CNTX","COWL","CPIN","CPRO","CSAP","CTBN","CTRA","CTTH","DART","DEFI","DEWA","DGIK","DILD","DKFT","DLTA","DMAS","DNAR","DNET","DOID","DPNS","DSFI","DSNG","DSSA","DUTI","DVLA","DYAN","ECII","EKAD","ELSA","ELTY","EMDE","EMTK","ENRG","EPMT","ERAA","ERTX","ESSA","ESTI","ETWA","EXCL","FAST","FASW","FISH","FMII","FORU","FPNI","GAMA","GDST","GDYR","GEMA","GEMS","GGRM","GIAA","GJTL","GLOB","GMTD","GOLD","GOLL","GPRA","GSMF","GTBO","GWSA","GZCO","HADE","HDFA","HERO","HEXA","HITS","HMSP","HOME","HOTL",
+"HRUM","IATA","IBFN","IBST","ICBP","ICON","IGAR","IIKP","IKAI","IKBI","IMAS","IMJS","IMPC","INAF","INAI","INCI","INCO","INDF","INDR","INDS","INDX","INDY","INKP","INPC","INPP","INRU","INTA","INTD","INTP","IPOL","ISAT","ISSP","ITMA","ITMG","JAWA","JECC","JIHD","JKON","JPFA","JRPT","JSMR","JSPT","JTPE","KAEF","KARW","KBLI","KBLM","KBLV","KBRI","KDSI","KIAS","KICI","KIJA","KKGI","KLBF","KOBX","KOIN","KONI","KOPI","KPIG","KRAS","KREN","LAPD","LCGP","LEAD","LINK","LION","LMAS","LMPI","LMSH","LPCK","LPGI","LPIN","LPKR","LPLI","LPPF","LPPS","LRNA","LSIP","LTLS","MAGP","MAIN","MAPI","MAYA","MBAP","MBSS","MBTO","MCOR","MDIA","MDKA","MDLN","MDRN","MEDC","MEGA","MERK","META","MFMI","MGNA","MICE","MIDI",
+"MIKA","MIRA","MITI","MKPI","MLBI","MLIA","MLPL","MLPT","MMLP","MNCN","MPMX","MPPA","MRAT","MREI","MSKY","MTDL","MTFN","MTLA","MTSM","MYOH","MYOR","MYTX","NELY","NIKL","NIRO","NISP","NOBU","NRCA","OCAP","OKAS","OMRE","PADI","PALM","PANR","PANS","PBRX","PDES","PEGE","PGAS","PGLI","PICO","PJAA","PKPK","PLAS","PLIN","PNBN","PNBS","PNIN","PNLF","PSAB","PSDN","PSKT","PTBA","PTIS","PTPP","PTRO","PTSN","PTSP","PUDP","PWON","PYFA","RAJA","RALS","RANC","RBMS","RDTX","RELI","RICY","RIGS","RIMO","RODA","ROTI","RUIS","SAFE","SAME","SCCO","SCMA","SCPI","SDMU","SDPC","SDRA","SGRO","SHID","SIDO","SILO","SIMA","SIMP","SIPD","SKBM","SKLT","SKYB","SMAR","SMBR","SMCB","SMDM","SMDR","SMGR","SMMA","SMMT","SMRA",
+"SMRU","SMSM","SOCI","SONA","SPMA","SQMI","SRAJ","SRIL","SRSN","SRTG","SSIA","SSMS","SSTM","STAR","STTP","SUGI","SULI","SUPR","TALF","TARA","TAXI","TBIG","TBLA","TBMS","TCID","TELE","TFCO","TGKA","TIFA","TINS","TIRA","TIRT","TKIM","TLKM","TMAS","TMPO","TOBA","TOTL","TOTO","TOWR","TPIA","TPMA","TRAM","TRIL","TRIM","TRIO","TRIS","TRST","TRUS","TSPC","ULTJ","UNIC","UNIT","UNSP","UNTR","UNVR","VICO","VINS","VIVA","VOKS","VRNA","WAPO","WEHA","WICO","WIIM","WIKA","WINS","WOMF","WSKT","WTON","YPAS","YULE","ZBRA","SHIP","CASA","DAYA","DPUM","IDPR","JGLE","KINO","MARI","MKNT","MTRA","OASA","POWR","INCF","WSBP","PBSA","PRDA","BOGA","BRIS","PORT","CARS","MINA","CLEO","TAMU","CSIS","TGRA","FIRE","TOPS",
+"KMTR","ARMY","MAPB","WOOD","HRTA","MABA","HOKI","MPOW","MARK","NASA","MDKI","BELL","KIOS","GMFI","MTWI","ZINC","MCAS","PPRE","WEGE","PSSI","MORA","DWGL","PBID","JMAS","CAMP","IPCM","PCAR","LCKM","BOSS","HELI","JSKY","INPS","GHON","TDPM","DFAM","NICK","BTPS","SPTO","PRIM","HEAL","TRUK","PZZA","TUGU","MSIN","SWAT","TNCA","MAPA","TCPI","IPCC","RISE","BPTR","POLL","NFCX","MGRO","NUSA","FILM","ANDI","LAND","MOLI","PANI","DIGI","CITY","SAPX","SURE","HKMU","MPRO","DUCK","GOOD","SKRN","YELO","CAKK","SATU","SOSS","DEAL","POLA","DIVA","LUCK","URBN","SOTS","ZONE","PEHA","FOOD","BEEF","POLI","CLAY","NATO","JAYA","COCO","MTPS","CPRI","HRME","POSA","JAST","FITT","BOLA","CCSI","SFAN","POLU","KJEN","KAYU",
+"ITIC","PAMG","IPTV","BLUE","ENVY","EAST","LIFE","FUJI","KOTA","INOV","ARKA","SMKL","HDIT","KEEN","BAPI","TFAS","GGRP","OPMS","NZIA","SLIS","PURE","IRRA","DMMX","SINI","WOWS","ESIP","TEBE","KEJU","PSGO","AGAR","IFSH","REAL","IFII","PMJS","UCID","GLVA","PGJO","AMAR","CSRA","INDO","AMOR","TRIN","DMND","PURA","PTPW","TAMA","IKAN","SAMF","SBAT","KBAG","CBMF","RONY","CSMI","BBSS","BHAT","CASH","TECH","EPAC","UANG","PGUN","SOFA","PPGL","TOYS","SGER","TRJA","PNGO","SCNP","BBSI","KMDS","PURI","SOHO","HOMI","ROCK","ENZO","PLAN","PTDU","ATAP","VICI","PMMP","BANK","WMUU","EDGE","UNIQ","BEBS","SNLK","ZYRX","LFLO","FIMP","TAPG","NPGF","LUCY","ADCP","HOPE","MGLV","TRUE","LABA","ARCI","IPAC","MASB","BMHS",
+"FLMC","NICL","UVCR","BUKA","HAIS","OILS","GPSO","MCOL","RSGK","RUNS","SBMA","CMNT","GTSI","IDEA","KUAS","BOBA","MTEL","DEPO","BINO","CMRY","WGSH","TAYS","WMPP","RMKE","OBMD","AVIA","IPPE","NASI","BSML","DRMA","ADMR","SEMA","ASLC","NETV","BAUT","ENAK","NTBK","SMKM","STAA","NANO","BIKE","WIRG","SICO","GOTO","TLDN","MTMH","WINR","IBOS","OLIV","ASHA","SWID","TRGU","ARKO","CHEM","DEWI","AXIO","KRYA","HATM","RCCC","GULA","JARR","AMMS","RAFI","KKES","ELPI","EURO","KLIN","TOOL","BUAH","CRAB","MEDS","COAL","PRAY","CBUT","BELI","MKTR","OMED","BSBK","PDPP","KDTN","ZATA","NINE","MMIX","PADA","ISAP","VTNY","SOUL","ELIT","BEER","CBPE","SUNI","CBRE","WINE","BMBL","PEVE","LAJU","FWCT","NAYZ","IRSX","PACK",
+"VAST","CHIP","HALO","KING","PGEO","FUTR","HILL","BDKR","PTMP","SAGE","TRON","CUAN","NSSS","GTRA","HAJJ","JATI","TYRE","MPXL","SMIL","KLAS","MAXI","VKTR","RELF","AMMN","CRSN","GRPM","WIDI","TGUK","INET","MAHA","RMKO","CNMA","FOLK","HBAT","GRIA","PPRI","ERAL","CYBR","MUTU","LMAX","HUMI","MSIE","RSCH","BABY","AEGS","IOTF","KOCI","PTPS","BREN","STRK","KOKA","LOPI","UDNG","RGAS","MSTI","IKPM","AYAM","SURI","ASLI","GRPH","SMGA","UNTD","TOSK","MPIX","ALII","MKAP","MEJA","LIVE","HYGN","BAIK","VISI","AREA","MHKI","ATLA","DATA","SOLA","BATR","SPRE","PART","GOLF","ISEA","BLES","GUNA","LABS","DOSS","NEST","PTMR","VERN","DAAZ","BOAT","NAIK","AADI","MDIY","KSIX","RATU","YOII","HGII","BRRC","DGWG","CBDK",
+"OBAT","MINE","ASPR","PSAT","COIN","CDIA","BLOG","MERI","CHEK","PMUI","EMAS","PJHB","RLCO","SUPA","KAQI","YUPI","FORE","MDLA","DKHH","AYLS","DADA","ASPI","ESTA","BESS","AMAN","CARE","PIPA","NCKL","MENN","AWAN","MBMA","RAAM","DOOH","CGAS","NICE","MSJA","SMLE","ACRO","MANG","WIFI","FAPA","DCII","KETR","DGNS","UFOE","ADMF","ADMG","ADRO","AGII","AGRO","AGRS","AHAP","AIMS","PNSE","POLY","POOL","PPRO",
+];
+const UNIQUE_TICKERS = [...new Set(TICKERS)];
+
+// ─── State ───────────────────────────────────────────────────────────────
+let scanning = false, shouldStop = false;
+let results = [], scanned = 0, errored = 0, logN = 0;
+let sortBy = 'ticks';
+
+// ─── Clock ───────────────────────────────────────────────────────────────
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('id-ID');
+}, 1000);
+
+// ─── Helpers ─────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function fmtVol(v) {
+  if (v >= 1e9) return (v/1e9).toFixed(1) + 'M';
+  if (v >= 1e6) return (v/1e6).toFixed(0) + 'Jt';
+  if (v >= 1e3) return (v/1e3).toFixed(0) + 'Rb';
+  return v;
+}
+
+function fmtMoney(price, vol) {
+  const val = price * vol;
+  if (val >= 1e9) return 'Rp ' + (val/1e9).toFixed(1) + 'M';
+  if (val >= 1e6) return 'Rp ' + (val/1e6).toFixed(0) + 'Jt';
+  return 'Rp ' + Math.round(val);
+}
+
+// ─── Log ─────────────────────────────────────────────────────────────────
+function log(msg, type = 'info') {
+  const t = new Date().toLocaleTimeString('id-ID');
+  logN++;
+  $('logCnt').textContent = logN + ' events';
+  const lb = $('logBody');
+  lb.innerHTML += `<div class="log-line"><span class="log-t">${t}</span><span class="l-${type}">${msg}</span></div>`;
+  lb.scrollTop = lb.scrollHeight;
+}
+
+// ─── Render single card ──────────────────────────────────────────────────
+function renderCard(s) {
+  const chgCls = s.changePct > 0 ? 'up' : s.changePct < 0 ? 'down' : 'flat';
+  const chgTxt = s.changePct > 0 ? `Up ${s.changePct.toFixed(1)}%`
+               : s.changePct < 0 ? `Down ${Math.abs(s.changePct).toFixed(1)}%`
+               : '0.0%';
+
+  const badgesHtml = [
+    s.isTight   ? `<span class="badge badge-ketat">KETAT</span>` : '',
+    s.isLiquid  ? `<span class="badge badge-liquid">LIKUID</span>` : '',
+    s.isBullish && s.ma100 ? `<span class="badge badge-bull">BULLISH</span>` : '',
+    s.daysSince > 3 ? `<span class="badge badge-stale">Stale ${s.daysSince}h</span>` : '',
+  ].filter(Boolean).join('');
+
+  const rowsHtml = s.tableRows.map(r => {
+    const rc = r.changePct > 0 ? 'up' : r.changePct < 0 ? 'down' : 'flat';
+    const rs = r.changePct > 0 ? `<span class="up">Up ${r.changePct.toFixed(1)}%</span>`
+             : r.changePct < 0 ? `<span class="down">Down ${Math.abs(r.changePct).toFixed(1)}%</span>`
+             : `<span class="flat">0.0%</span>`;
+    return `<tr>
+      <td>${r.date}</td>
+      <td>${rs}</td>
+      <td>${r.open}</td>
+      <td>${r.close}</td>
+      <td>${fmtVol(r.volume)}</td>
+      <td>${r.K??'-'}</td>
+      <td>${r.D??'-'}</td>
+      <td>${r.ma5??'-'}</td>
+      <td>${r.ma10??'-'}</td>
+      <td>${r.ma20??'-'}</td>
+      <td>${r.ma50??'-'}</td>
+      <td>${r.ma100??'-'}</td>
+      <td>${r.macd}</td>
+      <td>${r.signal}</td>
+      <td>${r.histogram}</td>
+      <td class="ticks">${r.rangeTicks} tks</td>
+      <td class="volp">${r.volPct}%</td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <div class="card ${s.isTight ? 'ketat' : ''}">
+    <div class="card-head">
+      <div>
+        <div class="card-ticker">${s.ticker}.JK
+          <span style="color:var(--muted);font-weight:400;font-size:12px"> / ${s.companyName}</span>
+        </div>
+        <div class="card-badges">${badgesHtml}</div>
+      </div>
+      <div class="card-price-wrap">
+        <div class="card-price">${s.price.toLocaleString('id-ID')}</div>
+        <div class="card-chg ${chgCls}">${chgTxt}</div>
+        <div class="card-meta">Vol: ${fmtVol(s.volume)} • ${fmtMoney(s.price, s.volume)}</div>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th style="text-align:left">Tanggal</th>
+          <th>Change%</th><th>Open</th><th>Close</th><th>Volume</th>
+          <th>%K</th><th>%D</th>
+          <th>MA5</th><th>MA10</th><th>MA20</th><th>MA50</th><th>MA100</th>
+          <th>MACD</th><th>Signal</th><th>Hist</th>
+          <th>Range%</th><th>Vol%</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+    <div class="card-foot">
+      <span>Tick size: ${s.tick} · MA100: ${s.ma100??'N/A'} · Ticks: ${s.rangeTicks.toFixed(2)} · Vol%: ${s.volPct.toFixed(2)}</span>
+      <div style="display:flex;gap:5px">${badgesHtml}</div>
+    </div>
+  </div>`;
+}
+
+// ─── Sort & redraw ───────────────────────────────────────────────────────
+function setSort(by) {
+  sortBy = by;
+  ['Ticks','Vol','Volume','Change'].forEach(k =>
+    $('s'+k).classList.toggle('on', k.toLowerCase() === by || (by==='ticks'&&k==='Ticks') || (by==='vol'&&k==='Vol'))
+  );
+  // fix active states properly
+  ['sTicks','sVol','sVolume','sChange'].forEach(id => $( id).classList.remove('on'));
+  if (by==='ticks')  $('sTicks').classList.add('on');
+  if (by==='vol')    $('sVol').classList.add('on');
+  if (by==='volume') $('sVolume').classList.add('on');
+  if (by==='change') $('sChange').classList.add('on');
+  redrawGrid();
+}
+
+function redrawGrid() {
+  const sorted = [...results].sort((a, b) => {
+    if (sortBy === 'ticks')  return a.rangeTicks - b.rangeTicks;
+    if (sortBy === 'vol')    return a.volPct     - b.volPct;
+    if (sortBy === 'volume') return b.volume     - a.volume;
+    if (sortBy === 'change') return b.changePct  - a.changePct;
+    return 0;
+  });
+  $('grid').innerHTML = sorted.length ? sorted.map(renderCard).join('') : `
+    <div class="empty">
+      <div class="empty-icon">🔍</div>
+      <div class="empty-t">Tidak ada hasil</div>
+      <div class="empty-s">Coba longgarkan parameter (naikkan Max Ticks atau Max Vol%)</div>
+    </div>`;
+  $('resCnt').textContent = sorted.length + ' saham';
+}
+
+function addResult(s) {
+  results.push(s);
+  $('sKetat').textContent  = results.filter(r => r.isTight).length;
+  $('sLiquid').textContent = results.filter(r => r.isLiquid).length;
+  redrawGrid();
+}
+
+// ─── Fetch via /api/scan (server-side proxy, no CORS) ────────────────────
+async function scanTicker(ticker, params) {
+  const qs = new URLSearchParams({
+    ticker,
+    maxTicks:   params.maxTicks,
+    maxVol:     params.maxVol,
+    minVolume:  params.minVolume,
+    reqBullish: params.reqBullish,
+  });
+  const res  = await fetch(`/api/scan?${qs}`);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+// ─── Main scan ───────────────────────────────────────────────────────────
+async function startScan() {
+  if (scanning) return;
+  scanning = true; shouldStop = false;
+  results = []; scanned = 0; errored = 0; logN = 0;
+
+  $('btnScan').disabled = true;
+  $('btnStop').style.display = 'inline-block';
+  $('progWrap').style.display = 'block';
+  $('floatScan').style.display = 'flex';
+  $('statusDot').classList.add('active');
+  $('grid').innerHTML = '';
+  $('logBody').innerHTML = '';
+  ['sTotal','sScanned','sKetat','sLiquid','sError'].forEach(id => $(id).textContent = '0');
+
+  const params = {
+    maxTicks:   parseFloat($('maxTicks').value)   || 6,
+    maxVol:     parseFloat($('maxVol').value)     || 3.8,
+    minVolume:  parseInt($('minVolume').value)    || 1000000,
+    reqBullish: $('reqBullish').value === 'true',
+  };
+  const showAll  = $('showAll').value === 'true';
+  const maxN     = parseInt($('maxStocks').value) || 100;
+  const tickers  = UNIQUE_TICKERS.slice(0, maxN);
+  $('sTotal').textContent = tickers.length;
+
+  log(`Mulai scan ${tickers.length} saham via server proxy...`, 'ok');
+
+  for (let i = 0; i < tickers.length; i++) {
+    if (shouldStop) { log('Scan dihentikan.', 'err'); break; }
+
+    const t = tickers[i];
+    $('floatTicker').textContent = t + '.JK';
+    $('progTxt').textContent = `Scanning ${t}.JK  (${i+1}/${tickers.length})`;
+    const pct = Math.round(i / tickers.length * 100);
+    $('progBar').style.width = pct + '%';
+    $('progPct').textContent = pct + '%';
+
+    try {
+      const resp = await scanTicker(t, params);
+      if (resp.ok) {
+        const s = resp.data;
+        scanned++;
+        $('sScanned').textContent = scanned;
+
+        if (s.signalOk) {
+          log(`✓ ${t}  →  Ticks: ${s.rangeTicks.toFixed(1)}  Vol%: ${s.volPct.toFixed(1)}%  KETAT ⚡`, 'hot');
+          addResult(s);
+        } else if (s.isTight) {
+          log(`→ ${t}  →  Tight (tidak likuid/bullish)`, 'ok');
+          if (showAll) addResult(s);
+        } else {
+          log(`  ${t}  →  Normal (${s.rangeTicks.toFixed(1)} ticks)`, 'info');
+          if (showAll) addResult(s);
+        }
+      } else {
+        errored++;
+        $('sError').textContent = errored;
+        log(`✗ ${t}  →  ${resp.error}`, 'err');
+      }
+    } catch(e) {
+      errored++;
+      $('sError').textContent = errored;
+      log(`✗ ${t}  →  ${e.message}`, 'err');
+    }
+
+    // Small delay – avoid rate-limit
+    await new Promise(r => setTimeout(r, 350));
+  }
+
+  // Done
+  scanning = false;
+  $('btnScan').disabled = false;
+  $('btnStop').style.display = 'none';
+  $('progBar').style.width = '100%';
+  $('progPct').textContent = '100%';
+  $('floatScan').style.display = 'none';
+  $('statusDot').classList.remove('active');
+  $('lastScan').textContent = 'Last: ' + new Date().toLocaleTimeString('id-ID');
+
+  const ketat = results.filter(r => r.isTight).length;
+  log(`✅ Selesai! ${scanned} dianalisis · ${ketat} MA Ketat ditemukan · ${errored} error`, 'hot');
+  if (results.length === 0) redrawGrid();
+}
+
+function stopScan() { shouldStop = true; }
+</script>
+</body>
+</html>
